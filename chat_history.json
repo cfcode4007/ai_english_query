@@ -1,0 +1,103 @@
+{
+  "default": {
+    "max_pairs": 10,
+    "messages": []
+  },
+  "aiopertor": {
+    "max_pairs": 10,
+    "messages": []
+  },
+  "news": {
+    "max_pairs": 10,
+    "messages": [
+      {
+        "role": "user",
+        "content": "I understand and you're making my point"
+      },
+      {
+        "role": "assistant",
+        "content": "Understood. If you want, I can focus on the key takeaways from that coverage."
+      },
+      {
+        "role": "user",
+        "content": "could you please summarize all the top headings for today"
+      },
+      {
+        "role": "assistant",
+        "content": "Top headlines today: Leafs lose to Bruins; Minten scores in Bruins win; Indigenous veterans day ceremonies; Toronto adds winter shelter spaces; Ontario property tax funding debate; Vaughan fatal crash sentencing; Ottawa immigration woes; Telus fibre expansion; COP30 Canada role; Paris Agreement critique; Canucks seek consecutive wins; Regina accessibility parks; Avalanche hot start; Nield helps Riders to Grey Cup; infant formula recalls."
+      },
+      {
+        "role": "user",
+        "content": "tell me more about the Ottawa immigration woes"
+      },
+      {
+        "role": "assistant",
+        "content": "Ottawa immigration woes: families of mass stabbing victims face stalled cases; federal help sought for delays, coverage, and processing to reunite or resettle affected relatives."
+      },
+      {
+        "role": "user",
+        "content": "Please provide a summary of the top 2 stories you think I may be interested in."
+      },
+      {
+        "role": "assistant",
+        "content": "Ottawa immigration delays harming families of victims; federal help urged for processing, coverage, reunification. Ontario cities say funding gaps risk 2026 property tax hikes."
+      },
+      {
+        "role": "user",
+        "content": "Any tech news listed? If so how many articles"
+      },
+      {
+        "role": "assistant",
+        "content": "Yes. There are 2 tech-related articles."
+      },
+      {
+        "role": "user",
+        "content": "what other kind of Articles do you have just tell me what kind of category you would place them in"
+      },
+      {
+        "role": "assistant",
+        "content": "Categories: Politics/Policy, local Canadian news; Infrastructure/Technology; Crime; Sports; Economy/Finance; Community/Human interest; Regional/City news; Education/Housing."
+      },
+      {
+        "role": "user",
+        "content": "can you give me a really brief summary of the two Tech articles"
+      },
+      {
+        "role": "assistant",
+        "content": "Two tech pieces: Telus fibre expansion across Ontario/Quebec; 3D-printed, net-zero student housing at Windsor."
+      },
+      {
+        "role": "user",
+        "content": "how about in politics"
+      },
+      {
+        "role": "assistant",
+        "content": "Here are the politics stories: Ontario minister pursues defense industry investments and jobs; Ontario weighs changes to college/university funding formula."
+      },
+      {
+        "role": "user",
+        "content": "Hi there"
+      },
+      {
+        "role": "assistant",
+        "content": "Hi! How can I help with the news today?"
+      },
+      {
+        "role": "user",
+        "content": "Yes, how many tech related headlines do you count?"
+      },
+      {
+        "role": "assistant",
+        "content": "Two tech-related headlines."
+      }
+    ]
+  },
+  "aioperator": {
+    "max_pairs": 10,
+    "messages": []
+  },
+  "aiEnglishQuery": {
+    "max_pairs": 10,
+    "messages": []
+  }
+}
