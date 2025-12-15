@@ -1,3 +1,6 @@
+# © 2025 Colin Bond
+# All rights reserved.
+
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
@@ -7,6 +10,8 @@ class MariaDBLogin:
     """Unified MariaDB login UI that can be used either as a standalone
     Tk window (no parent) or as a modal Toplevel (parent supplied).
     """
+    version = "0.0.1"
+
     def __init__(self, parent: tk.Misc | None = None, initial_values: dict | None = None):
         # Create window either as Toplevel (if parent given) or Tk
         if parent is None:

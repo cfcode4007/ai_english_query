@@ -1,4 +1,6 @@
-# mariadb_connector.py
+# © 2025 Colin Bond
+# All rights reserved.
+
 import mysql.connector
 from mysql.connector import Error
 from typing import Optional, List, Dict, Any, Generator

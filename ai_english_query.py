@@ -1,3 +1,6 @@
+# © 2025 Colin Bond
+# All rights reserved.
+
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
@@ -12,12 +15,11 @@ import logging
 
 class aiEnglishQuery(tk.Frame):
 	"""
-    Window that contains an interface for submitting plain English queries to an AI agent who generates SQL, which is executed by itself.
+    Interface for submitting plain English queries to an AI agent who generates SQL, which is executed by itself.
     """
-	# Current aiEnglishQuery.py Version
-	version = "0.0.2"
+	version = "0.0.3"
+	# - Version 0.0.3: Modified STTListener to explicitly stop listening after a 'phrase' (speech within time limit or silence timeout)
 	# - Version 0.0.2: Implemented STTListener integration for dynamic speech to text input, push to talk but recognizes pauses
-	# - Version 0.0.1: Initial release with basic UI that calls MariaDB login, accepts plain English input, generates SQL, executes against MariaDB, and displays results in grid.
 
 	# Provide a default placeholder for the connection object (None until 'initialize_connection' runs)
 	db = None
@@ -30,23 +32,23 @@ class aiEnglishQuery(tk.Frame):
 		super().__init__(master)
 		# Set debug mode to true in logs, displaying more information
 		self.configure_logging(True)						
-
 		# Initialize the MariaDB connection with required parameters (to be replaced with MariaDB login dialog)
 		# Keep reference to application master window
 		self.master = master
 		# If a database connection was provided, use it; otherwise expect
 		# the caller to set it before calling db-related methods
 		self.db = db
-
 		# Initialize Open AI Key, Payload, and an AI agent with desired parameters for every analysis in the session
 		api_key = self.load_openai_key()
 		self.payload = Payload(prompt_file, history_file, api_key)
-		logging.info(f"AIEnglishQuery v{self.version} class currently using ModelConnection v{self.payload.connection.version}, PromptBuilder v{self.payload.prompts.version}, ChatHistoryManager v{self.payload.history.version}, Payload v{self.payload.version}, MariaDBConnector v{self.db.version if self.db else 'N/A'}")
+		logging.info(f"AIEnglishQuery v{self.version} class currently using ModelConnection v{self.payload.connection.version}, PromptBuilder v{self.payload.prompts.version}, ChatHistoryManager v{self.payload.history.version}, Payload v{self.payload.version}, MariaDBLogin v{MariaDBLogin.version}, MariaDBConnector v{self.db.version if self.db else 'N/A'}, STTListener v{STTListener.version}")
 		# Configure AI for session
 		self.initialize_ai("gpt-5-nano", "low", "aiEnglishQuery_AIDB", "aiEnglishQuery", True)
 		# Initialize STT listener and callback to write to text input
 		try:
-			self.stt_listener = STTListener(callback=self._stt_transcribed, log_callback=self._stt_log)
+			# Provide a stop callback so UI can update the Start/Stop button when
+			# listening stops due to a silence timeout, phrase completion or error
+			self.stt_listener = STTListener(callback=self._stt_transcribed, log_callback=self._stt_log, on_stop=self._on_stt_stop)
 		except Exception as e:
 			logging.warning(f"STTListener initialization failed: {e}")
 			self.stt_listener = None
@@ -98,7 +100,7 @@ class aiEnglishQuery(tk.Frame):
 		return self.clean_ai_response(reply)
 
 	def clean_ai_response(self, ai_response):
-		# --- Clean AI response (remove ```json or ``` etc.) ---
+		# Clean AI response (remove ```json or ``` etc.)
 		cleaned = re.sub(r'^```[a-zA-Z]*\n?', '', ai_response.strip())
 		cleaned = re.sub(r'\n?```$', '', cleaned.strip())
 		response_text = cleaned
@@ -144,7 +146,7 @@ class aiEnglishQuery(tk.Frame):
 		self.clear_btn = tk.Button(self, text="Clear", command=self.on_clear)
 		self.clear_btn.grid(row=3, column=1, sticky="e", padx=6, pady=6)
 
-		# Speech toggle button — will be disabled if STTListener not available
+		# Speech toggle button, will be disabled if STTListener not available
 		self.speech_toggle_btn = tk.Button(self, text="Start Speech", command=self._toggle_speech)
 		self.speech_toggle_btn.grid(row=3, column=2, sticky="e", padx=6, pady=6)
 		if not hasattr(self, 'stt_listener') or self.stt_listener is None:
@@ -184,7 +186,7 @@ class aiEnglishQuery(tk.Frame):
 
 		self.result_frame.grid_rowconfigure(0, weight=1)
 		self.result_frame.grid_columnconfigure(0, weight=1)
-		# Place the result grid above the input area; hide until populated
+		# Place the result grid above the input area, hide until populated
 		self.result_frame.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=6, pady=(0, 6))
 		self.grid_rowconfigure(0, weight=1)
 		self.result_frame.grid_remove()
@@ -192,11 +194,11 @@ class aiEnglishQuery(tk.Frame):
 		# Keyboard binding for Ctrl+Enter to submit
 		self.text.bind('<Control-Return>', lambda event: self.on_submit())
 
-		# Pack the frame (we're using grid inside frame)
+		# Pack the frame (using grid inside frame)
 		self.pack(fill="both", expand=True)
 
 		# Bind resize event on the top-level window to enforce a maximum height
-		# for the input text: it should never exceed 25% of the total form height.
+		# for the input text, it should never exceed 25% of the total form height
 		if self.master is not None:
 			# Keep a reference font object for line height metrics
 			self._text_font = tkfont.Font(font=self.text["font"]) if self.text["font"] else tkfont.nametofont("TkDefaultFont")
@@ -239,7 +241,7 @@ class aiEnglishQuery(tk.Frame):
 			except Exception:
 				pass
 		except Exception:
-			# Don't crash UI if resize logic fails; just skip
+			# Don't crash UI if resize logic fails, just skip
 			return
 
 	def load_to_tkinter_grid(self, results):
@@ -305,14 +307,39 @@ class aiEnglishQuery(tk.Frame):
 	def _stt_transcribed(self, text: str):
 		# Write transcription into the text widget (replace contents)
 		try:
-			self.text.delete('1.0', 'end')
-			self.text.insert('1.0', text)
-			self.status_var.set('Transcribed')
+			# This callback is invoked from a background thread in STTListener.
+			# Schedule UI updates on the main Tk thread using `after`.
+			if self.master:
+				self.master.after(0, lambda: (self.text.delete('1.0', 'end'), self.text.insert('1.0', text), self.status_var.set('Transcribed')))
+			else:
+				# Defensive fallback if no master is provided
+				self.text.delete('1.0', 'end')
+				self.text.insert('1.0', text)
+				self.status_var.set('Transcribed')
 		except Exception:
 			logging.exception('Error writing transcription into widget')
 
 	def _stt_log(self, message: str):
-		self.status_var.set(message)
+		if self.master:
+			# Schedule the update on the main thread
+			self.master.after(0, lambda: self.status_var.set(message))
+		else:
+			self.status_var.set(message)
+
+	def _on_stt_stop(self):
+		"""Called by the STTListener when listening stops (silence, phrase end, or error).
+
+		The method schedules a UI update on the main thread to reset the button text
+		and status. This method can be called from a background thread.
+		"""
+		try:
+			if self.master:
+				self.master.after(0, lambda: (self.speech_toggle_btn.config(text='Start Speech'), self.status_var.set('Ready')))
+			else:
+				self.speech_toggle_btn.config(text='Start Speech')
+				self.status_var.set('Ready')
+		except Exception:
+			logging.exception('Error in _on_stt_stop')
 
 	def _toggle_speech(self):
 		# Toggle speech listening using the stt_listener instance
@@ -339,11 +366,6 @@ def main():
 		login.password_var.set("ai")
 	except Exception:
 		pass
-	# Optionally pre-fill default values as desired
-	# login.host_var.set("192.168.123.244")
-	# login.database_var.set("ai_db")
-	# login.username_var.set("ai")
-	# login.password_var.set("ai")
 	conn = login.run()
 	# Ensure login window is properly closed
 	try:

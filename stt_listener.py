@@ -1,6 +1,8 @@
+# © 2025 Colin Bond
+# All rights reserved.
+
 import sys
 import json
-import re
 import logging
 import os
 import speech_recognition as sr
@@ -13,32 +15,24 @@ class STTListener:
     API:
       - callback: Callable[[str], None] for receiving transcribed text
       - log_callback: Optional[Callable[[str], None]] to receive log messages
-      - config: loaded from `config.json` by default; can be passed in
+      - config: loaded from `config.json` by default, can be passed in
 
-    Modes supported: speech (manual start/stop), wake (listen for wake words),
-    auto_wake_send (wake and automatically send callback when detected).
+    Modes supported: speech (manual start/stop).
     """
-    def __init__(self, callback: Callable[[str], None], log_callback: Optional[Callable[[str], None]] = None, config: dict | None = None):
+    version = "0.0.2"
+    # - Version 0.0.2: Modified STTListener to explicitly stop listening after a 'phrase' (speech within time limit or silence timeout)
+
+    def __init__(self, callback: Callable[[str], None], log_callback: Optional[Callable[[str], None]] = None, config: dict | None = None, on_stop: Optional[Callable[[], None]] = None):
         self.recognizer = sr.Recognizer()
         self.microphone = None
         self.is_listening = False
-        self.is_wake_mode = False
-        self.is_auto_wake_send = False
         self.stop_listening = Event()
         self.speech_thread: Optional[Thread] = None
         self.callback = callback
         self.log_callback = log_callback
+        self.on_stop = on_stop
         self.config = config or self.load_config()
         self.init_microphone()
-
-        # Example usage:
-        #
-        # def write_to_text_widget(text):
-        #     text_widget.delete("1.0", "end")
-        #     text_widget.insert("1.0", text)
-        #
-        # stt = STTListener(callback=write_to_text_widget)
-        # stt.start_speech()
 
     def load_config(self):
         try:
@@ -97,6 +91,14 @@ class STTListener:
         """Update the log callback function."""
         self.log_callback = log_callback
 
+    def set_stop_callback(self, on_stop: Callable[[], None]):
+        """Set or update the stop callback invoked when the listener stops.
+
+        This callback is called whenever listening stops due to silence, max
+        phrase length, or errors.
+        """
+        self.on_stop = on_stop
+
     def _on_transcription(self, text: str):
         """Internal callback invoked when text is transcribed.
 
@@ -105,10 +107,6 @@ class STTListener:
         try:
             if self.callback:
                 self.callback(text)
-            if self.is_auto_wake_send:
-                # If auto send is enabled, invoke the callback again to indicate send
-                # or rely on the application to automatically send when receiving text.
-                pass
         except Exception as e:
             logging.exception(f"Error in transcription callback: {e}")
 
@@ -154,10 +152,14 @@ class STTListener:
         """Stop all listeners and clean up threads."""
         self.stop_listening.set()
         self.is_listening = False
-        self.is_wake_mode = False
-        self.is_auto_wake_send = False
         if self.speech_thread:
             self.speech_thread.join(timeout=1.0)
+        # Notify interested parties that listener stopped
+        if self.on_stop:
+            try:
+                self.on_stop()
+            except Exception:
+                logging.exception('on_stop callback raised an exception')
 
     def listen_speech(self):
         with self.microphone as source:
@@ -170,63 +172,48 @@ class STTListener:
                     self._on_transcription(text)
                     self._log(f"Transcribed: {text}")
                     logging.debug(f"Transcribed: {text}")
+                    # Stop listening after every word within the phrase time limit is transcribed, assuming no major pauses
+                    self.is_listening = False
+                    self.stop_listening.set()
+                    if self.on_stop:
+                        try:
+                            self.on_stop()
+                        except Exception:
+                            logging.exception('on_stop callback raised an exception')
+                    break
                 except sr.WaitTimeoutError:
-                    logging.debug("WaitTimeoutError")
-                    continue
+                    # No speech heard during silence timeout, stop listening
+                    logging.debug("WaitTimeoutError (silence) - stopping listener")
+                    self._log("Stopped listening due to silence")
+                    self.is_listening = False
+                    self.stop_listening.set()
+                    if self.on_stop:
+                        try:
+                            self.on_stop()
+                        except Exception:
+                            logging.exception('on_stop callback raised an exception')
+                    break
                 except sr.UnknownValueError:
+                    # Unknown audio, stop listening and notify UI
                     self._log("Speech Error: Could not understand audio.")
                     logging.error("UnknownValueError: Could not understand audio.")
+                    self.is_listening = False
+                    self.stop_listening.set()
+                    if self.on_stop:
+                        try:
+                            self.on_stop()
+                        except Exception:
+                            logging.exception('on_stop callback raised an exception')
+                    break
                 except sr.RequestError as e:
                     self._log(f"Speech Error: {str(e)}")
                     logging.error(f"RequestError: {str(e)}")
                     self.is_listening = False
                     self._log("Stopping speech recognition due to error.")
+                    if self.on_stop:
+                        try:
+                            self.on_stop()
+                        except Exception:
+                            logging.exception('on_stop callback raised an exception')
                     break
-                if self.stop_listening.is_set():
-                    break
-
-    def test_microphone(self):
-        if not self.microphone:
-            self._log("Error: Microphone not initialized")
-            logging.error("Microphone not initialized.")
-            return False
-        try:
-            with self.microphone as source:
-                self.recognizer.adjust_for_ambient_noise(source, duration=3)
-                self._log("Testing microphone... Speak now.")
-                logging.debug("Testing microphone...")
-                audio = self.recognizer.listen(source, timeout=5)
-                self._log("Microphone test: Audio detected successfully.")
-                logging.debug("Microphone test successful.")
-            return True
-        except sr.WaitTimeoutError:
-            self._log("Microphone test: No audio detected within 5 seconds.")
-            logging.error("WaitTimeoutError in mic test.")
-        except Exception as e:
-            self._log(f"Microphone test error: {str(e)}")
-            logging.error(f"Mic test error: {str(e)}")
-        return False
-
-    # send_text removed; the application should handle sending logic by receiving
-    # the transcription callback and processing/sending as needed.
-
-    # handle_drop removed - this class is headless and should not handle GUI drop events
-
-if __name__ == "__main__":
-    # Quick CLI demo that prints transcriptions to stdout
-    def print_cb(text: str):
-        print(f"Transcription: {text}")
-
-    def log_cb(msg: str):
-        print(f"LOG: {msg}")
-
-    listener = STTListener(callback=print_cb, log_callback=log_cb)
-    print("STTListener created. Toggle modes in code or press Ctrl-C to exit.")
-    try:
-        while True:
-            import time
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("Exiting")
-        listener.stop_listening.set()
 

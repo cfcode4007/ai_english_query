@@ -1,5 +1,5 @@
-/NorthwindPrompt.txt
 /__pycache__
-/aiEnglishQuery.bak
 /aiEnglishQuery.log
-/test.py
+/.pytest_cache
+/tests
+/.vscode
